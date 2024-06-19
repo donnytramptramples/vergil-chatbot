@@ -1,5 +1,3 @@
-# train.py
-
 import torch
 import torch.nn as nn
 from torch import optim
@@ -58,11 +56,15 @@ attention = Attention(hidden_size).to(device)
 decoder = Decoder(hidden_size, vocab_size, attention).to(device)
 
 # Define loss function and optimizer
+params = list(encoder.parameters()) + list(attention.parameters()) + list(decoder.parameters())
+optimizer = optim.Adam(params, lr=learning_rate)
 criterion = nn.NLLLoss()
-optimizer = optim.Adam(list(encoder.parameters()) + list(attention.parameters()) + list(decoder.parameters()), lr=learning_rate)
 
 # Dummy DataLoader, replace with your actual DataLoader
 train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+
+# train.py
+# ... (rest of the code remains the same)
 
 def train_model(encoder, decoder, train_loader, device):
     encoder.train()
@@ -78,29 +80,30 @@ def train_model(encoder, decoder, train_loader, device):
             target_ids = target_ids.to(device)
 
             encoder_outputs, encoder_hidden = encoder(input_ids)
-            decoder_hidden = encoder_hidden
 
-            # Handle case where <SOS> token is not found
-            decoder_input = torch.tensor([[sos_index]] * input_ids.size(0), device=device)
-            if sos_index is None:
-                raise ValueError("'<SOS>' token not found in the vocabulary!")
+            # Initialize decoder_hidden with encoder's final hidden state
+            decoder_hidden = encoder_hidden  # No need to unsqueeze
+
+            # Initialize decoder_input with SOS token index
+            decoder_input = torch.tensor([sos_index] * input_ids.size(0), device=device)
 
             max_target_length = target_ids.size(1)
             loss = 0
             for t in range(max_target_length):
                 decoder_output, decoder_hidden, decoder_attention = decoder(
-                    decoder_input, decoder_hidden, encoder_outputs)
+                    decoder_input.unsqueeze(1), decoder_hidden, encoder_outputs)
 
                 loss += criterion(decoder_output.squeeze(1), target_ids[:, t])
-                decoder_input = target_ids[:, t].unsqueeze(1)
+                decoder_input = target_ids[:, t].unsqueeze(1)  # Use teacher forcing for next input
 
             total_loss += loss.item() / max_target_length
             loss.backward()
             optimizer.step()
 
-            # Print debugging information
             print(f"Batch {step + 1}/{len(train_loader)}, Loss: {loss.item() / max_target_length}")
 
         print(f"Average Train Loss: {total_loss / len(train_loader)}")
 
-train_model(encoder, decoder, train_loader, device)
+# Run training
+if __name__ == "__main__":
+    train_model(encoder, decoder, train_loader, device)
